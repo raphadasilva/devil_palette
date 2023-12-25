@@ -232,14 +232,19 @@ def hexcent_clus(DF_dest:pd.core.frame.DataFrame,DF_source:pd.core.frame.DataFra
         print("Attention, votre DF de clusters doit bien contenir deux colonnes hex et clusters.")
 
 
-def prep_cluster(DF:pd.core.frame.DataFrame, n_clus=5, deter=False):
+def prep_cluster(DF:pd.core.frame.DataFrame, n_clus=5, unique_values=False, deter=False):
     """
         Cette fonction prépare trois DataFrames à partir d'un tableau Numpy généré par la fonction prep_picture.
         Elle va, en fonction d'un nombre de classes (entre 2 et 10), déterminer les groupes de couleurs les plus cohérents.
         On peut aussi laisser le programme déterminer le nombre de clusters optimal en changeant la variable deter. 
+        Si une teinte minoritaire a de l'importance, vous pouvez purger les couleurs doublonnées en passant unique_values à True.
     """
     try:
-        X = DF[["r","v","b"]]
+        if unique_values:
+            DF_u = unique_DF(DF,["hex"])
+            X = DF_u[["r","v","b"]]
+        else:
+            X = DF[["r","v","b"]]
         if deter:
             n_clus = nclusters_kmeans(X)
         elif ~n_clus in list(range(2,11)):
@@ -247,11 +252,17 @@ def prep_cluster(DF:pd.core.frame.DataFrame, n_clus=5, deter=False):
             print("Vous devez choisir pour n_clus un nombre compris entre 2 et 10. Le nombre imposé sera 5.")
         modele = KMeans(n_clusters=n_clus,n_init=10).fit(X)
         DF_clusters = clusters_to_df(modele)
-        DF = labels_kmeans(DF,modele)
+        if unique_values:
+            DF_u = labels_kmeans(DF_u,modele)
+            DF = DF.merge(DF_u[["hex","cluster"]], on="hex")
+        else:
+            DF = labels_kmeans(DF,modele)
         DF_hexcent = hexcent_clus(DF_clusters,DF)
         return DF, DF_clusters ,DF_hexcent
     except TypeError:
         print("Veuillez vérifier le format de vos variables")
+    except ValueError:
+        print("Attention à la taille de vos index.")
 
 
 def bar_pct(axis_ref,DF:pd.core.frame.DataFrame,orientation="horizontal"):
@@ -352,7 +363,7 @@ def clus_opa(img:Image, DF:pd.core.frame.DataFrame, index_cluster:int):
         print("Attention, votre DF doit avoir le même nombre de lignes que les pixels de l'image !")
 
 
-def simple_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,path_palette="palette.jpg", path_text="palette.txt"):
+def simple_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,unique=False,path_palette="palette.jpg", path_text="palette.txt"):
     """
        Cette fonction crée une palette simple à partir d'une image locale ou hébergée sur Internet.
        Le nombre de couleurs de la palette (entre 2 et 10) est renseigné par l'utilisateur ou calculé par K-Means. 
@@ -362,7 +373,7 @@ def simple_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,path_palette
     """
     try:
         DF, img_ref = prep_picture(img_path,width=w)
-        hex_DF = prep_cluster(DF, n_clus=nb_clus,deter=auto_cluster)[2]
+        hex_DF = prep_cluster(DF, n_clus=nb_clus,unique_values=unique,deter=auto_cluster)[2]
         
         fig = plt.figure(figsize=(15,15),constrained_layout=True)
         gspec = fig.add_gridspec(nrows=2, ncols=1, height_ratios=[4,.3], hspace=.1)
@@ -379,7 +390,7 @@ def simple_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,path_palette
         print("Attention à vos chemins de fichier.")
 
 
-def devil_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,path_palette="devil_palette.jpg", path_text="palette.txt"):
+def devil_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,unique=False,path_palette="devil_palette.jpg", path_text="palette.txt"):
     """
         Cette fonction crée une 'palette à la diable' à partir d'une image.
         Elle se compose d'un rappel de l'image et d'une ligne par classe de couleur identifiée.
@@ -391,7 +402,7 @@ def devil_palette(img_path:str,w=512,nb_clus=5, auto_cluster=False,path_palette=
     """
     try:
         DF, img_ref = prep_picture(img_path,width=w)
-        def_DF, clus_DF, hex_DF = prep_cluster(DF, n_clus=nb_clus,deter=auto_cluster)
+        def_DF, clus_DF, hex_DF = prep_cluster(DF, n_clus=nb_clus,unique_values=unique,deter=auto_cluster)
 
         fig = plt.figure(figsize=(15,10+(len(clus_DF)*10)),constrained_layout=True)
         gspec = fig.add_gridspec(nrows=1+len(clus_DF), ncols=3, height_ratios=[8]+[5]*len(clus_DF),width_ratios=[.5,7,4])
